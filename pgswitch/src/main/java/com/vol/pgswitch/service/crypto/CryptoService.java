@@ -2,6 +2,12 @@ package com.vol.pgswitch.service.crypto;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.kms.KmsClient;
+import software.amazon.awssdk.services.kms.model.EncryptRequest;
+import software.amazon.awssdk.services.kms.model.DecryptRequest;
+import software.amazon.awssdk.services.kms.model.EncryptResponse;
+import software.amazon.awssdk.services.kms.model.DecryptResponse;
+import software.amazon.awssdk.core.SdkBytes;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -63,15 +69,23 @@ public class CryptoService {
     private static final int KEY_LENGTH = 256; // 256 bits
 
     private final String masterKeyBase64;
+    private final String kmsKeyId;
+    private final KmsClient kmsClient;
 
     /**
-     * Constructor - Initializes crypto service with master key
+     * Constructor - Initializes crypto service with master key or KMS
      * 
-     * @param masterKeyBase64 Base64 encoded master key from environment
+     * @param masterKeyBase64 Base64 encoded master key from environment (fallback)
+     * @param kmsKeyId AWS KMS key ID (primary)
+     * @param kmsClient AWS KMS client
      */
-    public CryptoService(@Value("${app.crypto.master-key-base64:}") String masterKeyBase64) {
+    public CryptoService(@Value("${app.crypto.master-key-base64:}") String masterKeyBase64,
+                        @Value("${app.crypto.kms-key-id:}") String kmsKeyId,
+                        @org.springframework.beans.factory.annotation.Autowired(required = false) KmsClient kmsClient) {
         this.masterKeyBase64 = masterKeyBase64;
-        validateMasterKey();
+        this.kmsKeyId = kmsKeyId;
+        this.kmsClient = kmsClient;
+        validateConfiguration();
     }
 
     /**
@@ -91,26 +105,13 @@ public class CryptoService {
         }
 
         try {
-            // Get the master key
-            SecretKey secretKey = getMasterKey();
-            
-            // Generate random IV for each encryption
-            byte[] iv = generateIV();
-            
-            // Initialize cipher for encryption
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec);
-            
-            // Encrypt the data
-            byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
-            
-            // Combine IV + ciphertext and encode as Base64
-            byte[] encryptedData = new byte[iv.length + ciphertext.length];
-            System.arraycopy(iv, 0, encryptedData, 0, iv.length);
-            System.arraycopy(ciphertext, 0, encryptedData, iv.length, ciphertext.length);
-            
-            return Base64.getEncoder().encodeToString(encryptedData);
+            if (kmsKeyId != null && !kmsKeyId.trim().isEmpty() && kmsClient != null) {
+                // Use AWS KMS for encryption
+                return encryptWithKMS(plaintext);
+            } else {
+                // Fallback to local master key
+                return encryptWithLocalKey(plaintext);
+            }
             
         } catch (Exception e) {
             throw new RuntimeException("Encryption failed", e);
@@ -134,27 +135,13 @@ public class CryptoService {
         }
 
         try {
-            // Decode Base64 data
-            byte[] encryptedBytes = Base64.getDecoder().decode(encryptedData);
-            
-            // Extract IV and ciphertext
-            byte[] iv = new byte[GCM_IV_LENGTH];
-            byte[] ciphertext = new byte[encryptedBytes.length - GCM_IV_LENGTH];
-            System.arraycopy(encryptedBytes, 0, iv, 0, GCM_IV_LENGTH);
-            System.arraycopy(encryptedBytes, GCM_IV_LENGTH, ciphertext, 0, ciphertext.length);
-            
-            // Get the master key
-            SecretKey secretKey = getMasterKey();
-            
-            // Initialize cipher for decryption
-            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
-            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec);
-            
-            // Decrypt the data
-            byte[] plaintext = cipher.doFinal(ciphertext);
-            
-            return new String(plaintext, StandardCharsets.UTF_8);
+            if (kmsKeyId != null && !kmsKeyId.trim().isEmpty() && kmsClient != null) {
+                // Use AWS KMS for decryption
+                return decryptWithKMS(encryptedData);
+            } else {
+                // Fallback to local master key
+                return decryptWithLocalKey(encryptedData);
+            }
             
         } catch (Exception e) {
             throw new RuntimeException("Decryption failed", e);
@@ -245,18 +232,102 @@ public class CryptoService {
      * 
      * @throws RuntimeException if key is not properly configured
      */
-    private void validateMasterKey() {
+    /**
+     * Encrypt using AWS KMS
+     */
+    private String encryptWithKMS(String plaintext) {
+        try {
+            EncryptRequest encryptRequest = EncryptRequest.builder()
+                    .keyId(kmsKeyId)
+                    .plaintext(SdkBytes.fromString(plaintext, StandardCharsets.UTF_8))
+                    .build();
+            
+            EncryptResponse encryptResponse = kmsClient.encrypt(encryptRequest);
+            return Base64.getEncoder().encodeToString(encryptResponse.ciphertextBlob().asByteArray());
+        } catch (Exception e) {
+            throw new RuntimeException("KMS encryption failed", e);
+        }
+    }
+
+    /**
+     * Decrypt using AWS KMS
+     */
+    private String decryptWithKMS(String encryptedData) {
+        try {
+            byte[] encryptedBytes = Base64.getDecoder().decode(encryptedData);
+            DecryptRequest decryptRequest = DecryptRequest.builder()
+                    .ciphertextBlob(SdkBytes.fromByteArray(encryptedBytes))
+                    .build();
+            
+            DecryptResponse decryptResponse = kmsClient.decrypt(decryptRequest);
+            return decryptResponse.plaintext().asString(StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("KMS decryption failed", e);
+        }
+    }
+
+    /**
+     * Encrypt using local master key (fallback)
+     */
+    private String encryptWithLocalKey(String plaintext) {
+        try {
+            SecretKey secretKey = getMasterKey();
+            byte[] iv = generateIV();
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec);
+            byte[] ciphertext = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+            byte[] encryptedData = new byte[iv.length + ciphertext.length];
+            System.arraycopy(iv, 0, encryptedData, 0, iv.length);
+            System.arraycopy(ciphertext, 0, encryptedData, iv.length, ciphertext.length);
+            return Base64.getEncoder().encodeToString(encryptedData);
+        } catch (Exception e) {
+            throw new RuntimeException("Local encryption failed", e);
+        }
+    }
+
+    /**
+     * Decrypt using local master key (fallback)
+     */
+    private String decryptWithLocalKey(String encryptedData) {
+        try {
+            byte[] encryptedBytes = Base64.getDecoder().decode(encryptedData);
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            byte[] ciphertext = new byte[encryptedBytes.length - GCM_IV_LENGTH];
+            System.arraycopy(encryptedBytes, 0, iv, 0, GCM_IV_LENGTH);
+            System.arraycopy(encryptedBytes, GCM_IV_LENGTH, ciphertext, 0, ciphertext.length);
+            SecretKey secretKey = getMasterKey();
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH * 8, iv);
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec);
+            byte[] plaintext = cipher.doFinal(ciphertext);
+            return new String(plaintext, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("Local decryption failed", e);
+        }
+    }
+
+    private void validateConfiguration() {
         if (masterKeyBase64 == null || masterKeyBase64.trim().isEmpty()) {
-            throw new RuntimeException("Master key not configured. Set APP_CRYPTO_MASTER_KEY environment variable.");
+            if (kmsKeyId == null || kmsKeyId.trim().isEmpty()) {
+                throw new RuntimeException("Neither master key nor KMS key configured. Set app.crypto.master-key-base64 or app.crypto.kms-key-id.");
+            }
         }
         
-        try {
-            byte[] keyBytes = Base64.getDecoder().decode(masterKeyBase64);
-            if (keyBytes.length != KEY_LENGTH / 8) {
-                throw new RuntimeException("Master key must be " + KEY_LENGTH + " bits (" + (KEY_LENGTH / 8) + " bytes)");
+        if (masterKeyBase64 != null && !masterKeyBase64.trim().isEmpty()) {
+            try {
+                byte[] keyBytes = Base64.getDecoder().decode(masterKeyBase64);
+                if (keyBytes.length != KEY_LENGTH / 8) {
+                    throw new RuntimeException("Master key must be " + KEY_LENGTH + " bits (" + (KEY_LENGTH / 8) + " bytes)");
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Invalid master key format: " + e.getMessage(), e);
             }
-        } catch (Exception e) {
-            throw new RuntimeException("Invalid master key format: " + e.getMessage(), e);
+        }
+        
+        // Validate KMS configuration if KMS is enabled
+        if (kmsKeyId != null && !kmsKeyId.trim().isEmpty() && kmsClient == null) {
+            throw new RuntimeException("KMS key ID configured but KmsClient not available. Check AWS credentials and region configuration.");
         }
     }
 
@@ -293,5 +364,9 @@ public class CryptoService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public boolean isKmsEnabled() {
+        return kmsKeyId != null && !kmsKeyId.trim().isEmpty() && kmsClient != null;
     }
 }

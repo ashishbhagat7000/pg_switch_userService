@@ -7,7 +7,8 @@ import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration;
 
 
 @SpringBootApplication
-public class PgswitchApplication {
+public class
+PgswitchApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(PgswitchApplication.class, args);

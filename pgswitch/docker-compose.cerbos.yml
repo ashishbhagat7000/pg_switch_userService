@@ -1,0 +1,5 @@
+"""
+This docker-compose file previously started Cerbos for policy-based
+authorization. Cerbos integration was removed from the project, so this
+file is retained only as a note and is intentionally left inactive.
+"""

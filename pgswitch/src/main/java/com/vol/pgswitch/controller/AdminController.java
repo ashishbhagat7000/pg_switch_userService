@@ -29,127 +29,35 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * SuperAdminController - REST API for super admin merchant management operations
- * 
- * This controller provides comprehensive merchant management capabilities for super administrators
- * including viewing, updating, deleting, and exporting merchant data.
- * 
- * SECURITY: These endpoints should be secured with proper authentication and authorization
- * to ensure only super administrators can access them.
- */
 @RestController
-@RequestMapping("/api/super-admin/merchants")
-@Tag(name = "Super Admin - Merchant Management", description = "Super administrator merchant management operations")
-public class SuperAdminController {
+@RequestMapping("/api/admin/merchants")
+@Tag(name = "Admin - Merchant Management", description = "Administrator merchant management operations")
+public class AdminController {
 
     private final MerchantApplicationService merchantApplicationService;
     private final CryptoService cryptoService;
 
-    public SuperAdminController(MerchantApplicationService merchantApplicationService,
-                               CryptoService cryptoService) {
+    public AdminController(MerchantApplicationService merchantApplicationService,
+                           CryptoService cryptoService) {
         this.merchantApplicationService = merchantApplicationService;
         this.cryptoService = cryptoService;
     }
 
-    /**
-     * Submit merchant application
-     */
-    @Operation(
-            summary = "Submit Merchant Application",
-            description = """
-                    Submits a complete merchant application with KYC documents for RBI PA compliance.
-                    
-                    **Security Features:**
-                    - Sensitive data encrypted with AES-256-GCM
-                    - Files stored securely outside web root
-                    - Comprehensive input validation
-                    - Transactional data persistence
-                    
-                    **Required Fields:**
-                    - Legal entity name, business type, contact information
-                    - Authorized signatory details with government ID
-                    - Bank account information for settlement
-                    - Transaction profile and business details
-                    
-                    **File Upload:**
-                    - Maximum 10MB per file, 25MB total
-                    - Supported formats: PDF, JPG, PNG, DOC, DOCX
-                    - Files stored with unique, secure naming
-                    """,
-            tags = {"Super Admin - Merchant Management"}
-    )
+    @Operation(summary = "Submit Merchant Application")
     @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Application submitted successfully",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = Map.class),
-                            examples = @ExampleObject(
-                                    name = "Success Response",
-                                    value = "{\"applicationId\": \"507f1f77bcf86cd799439011\"}"
-                            )
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "400",
-                    description = "Invalid input data or validation errors",
-                    content = @Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(
-                                    name = "Validation Error",
-                                    value = "{\"error\": \"Validation failed\", \"details\": [\"Legal entity name is required\"]}"
-                            )
-                    )
-            ),
-            @ApiResponse(
-                    responseCode = "500",
-                    description = "Internal server error",
-                    content = @Content(
-                            mediaType = "application/json",
-                            examples = @ExampleObject(
-                                    name = "Server Error",
-                                    value = "{\"error\": \"Internal server error\", \"message\": \"File storage failed\"}"
-                            )
-                    )
-            )
+            @ApiResponse(responseCode = "200", description = "Application submitted successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class),
+                            examples = @ExampleObject(value = "{\"applicationId\": \"507f1f77bcf86cd799439011\"}")))
     })
     @PostMapping(value = "/submit", consumes = {"multipart/form-data"})
     public ResponseEntity<Map<String, Object>> submitMerchantApplication(
-            @Parameter(
-                    description = "Merchant application data as JSON string",
-                    required = true,
-                    example = """
-                            {
-                              "legalEntityName": "Test Company Pvt Ltd",
-                              "businessType": "Pvt Ltd",
-                              "businessCategory": "E-commerce",
-                              "businessPan": "ABCDE1234F",
-                              "contactEmail": "contact@testcompany.com",
-                              "signatoryFullName": "John Doe",
-                              "signatoryEmail": "john@testcompany.com",
-                              "accountHolderName": "Test Company Pvt Ltd",
-                              "bankName": "State Bank of India",
-                              "ifscCode": "SBIN0001234",
-                              "goodsOrServices": "Online retail sales"
-                            }
-                            """
-            )
+            @Parameter(description = "Merchant application data as JSON string", required = true)
             @RequestPart("data") String requestJson,
-
-            @Parameter(
-                    description = "KYC documents (PAN, GST Certificate, etc.)",
-                    required = false
-            )
+            @Parameter(description = "KYC documents (PAN, GST Certificate, etc.)", required = false)
             @RequestPart(value = "files", required = false) List<MultipartFile> files
     ) throws IOException {
         try {
@@ -161,13 +69,10 @@ public class SuperAdminController {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid submission payload", e);
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Invalid submission payload", e);
         }
     }
 
-    /**
-     * Get all merchants with pagination and filtering
-     */
     @Operation(summary = "Get all merchants", description = "Retrieve paginated list of all merchant applications")
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllMerchants(
@@ -176,13 +81,12 @@ public class SuperAdminController {
             @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(required = false) String search) {
-        Sort sort = sortDir.equalsIgnoreCase("desc") ? 
-            Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Sort sort = sortDir.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<MerchantApplicationEntity> merchants = merchantApplicationService.findAllMerchants(pageable, search);
         List<MerchantViewResponse> merchantViews = merchants.getContent().stream()
-            .map(this::convertToViewResponse)
-            .collect(Collectors.toList());
+                .map(this::convertToViewResponse)
+                .collect(Collectors.toList());
         Map<String, Object> response = new HashMap<>();
         response.put("merchants", merchantViews);
         response.put("currentPage", merchants.getNumber());
@@ -193,29 +97,22 @@ public class SuperAdminController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get single merchant by ID
-     */
     @Operation(summary = "Get merchant by ID", description = "Retrieve detailed information about a specific merchant")
     @GetMapping("/{id}")
     public ResponseEntity<MerchantViewResponse> getMerchantById(@PathVariable String id) {
         MerchantApplicationEntity merchant = merchantApplicationService.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Merchant not found with ID: " + id));
+                .orElseThrow(() -> new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Merchant not found with ID: " + id));
         return ResponseEntity.ok(convertToViewResponse(merchant));
     }
 
-    /**
-     * Get fully decrypted merchant by ID (for super admin diagnostics)
-     * mode=master|user. If user, provide userId to use user's key.
-     */
-    @Operation(summary = "Get decrypted merchant by ID", description = "Return decrypted fields using master or user key")
+    @Operation(summary = "Get decrypted merchant by ID", description = "Return decrypted fields using master key")
     @GetMapping("/{id}/decrypted")
     public ResponseEntity<Map<String, Object>> getMerchantByIdDecrypted(
             @PathVariable String id,
             @RequestParam(defaultValue = "master") String mode,
             @RequestParam(required = false) String userId) {
         MerchantApplicationEntity entity = merchantApplicationService.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Merchant not found with ID: " + id));
+                .orElseThrow(() -> new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Merchant not found with ID: " + id));
         String businessPan = cryptoService.decrypt(entity.getBusinessPanEncrypted());
         String gstin = cryptoService.decrypt(entity.getGstinEncrypted());
         String cin = cryptoService.decrypt(entity.getCinEncrypted());
@@ -234,9 +131,6 @@ public class SuperAdminController {
         return ResponseEntity.ok(out);
     }
 
-    /**
-     * Update merchant details
-     */
     @Operation(summary = "Update merchant", description = "Update merchant application details")
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> updateMerchant(
@@ -250,13 +144,10 @@ public class SuperAdminController {
             response.put("updatedAt", System.currentTimeMillis());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
     }
 
-    /**
-     * Delete merchant application immediately
-     */
     @Operation(summary = "Delete merchant", description = "Delete merchant application and associated KYC documents")
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteMerchant(@PathVariable String id) {
@@ -268,30 +159,27 @@ public class SuperAdminController {
             response.put("deletedAt", System.currentTimeMillis());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage(), e);
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, e.getMessage(), e);
         }
     }
 
-    /**
-     * Get merchant KYC documents
-     */
     @Operation(summary = "Get merchant KYC documents", description = "Retrieve all KYC documents for a merchant")
     @GetMapping("/{id}/kyc-documents")
     public ResponseEntity<Map<String, Object>> getMerchantKycDocuments(@PathVariable String id) {
         MerchantApplicationEntity merchant = merchantApplicationService.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Merchant not found with ID: " + id));
+                .orElseThrow(() -> new ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Merchant not found with ID: " + id));
         List<MerchantViewResponse.KycDocumentView> kycDocs = merchant.getKycDocuments().stream()
-            .map(doc -> {
-                MerchantViewResponse.KycDocumentView view = new MerchantViewResponse.KycDocumentView();
-                view.setId(doc.getId());
-                view.setDocumentType(doc.getDocumentType());
-                view.setOriginalFilename(doc.getOriginalFilename());
-                view.setSizeBytes(doc.getSizeBytes());
-                view.setContentType(doc.getContentType());
-                view.setDownloadUrl("/api/super-admin/merchants/" + id + "/kyc-documents/" + doc.getId() + "/download");
-                return view;
-            })
-            .collect(Collectors.toList());
+                .map(doc -> {
+                    MerchantViewResponse.KycDocumentView view = new MerchantViewResponse.KycDocumentView();
+                    view.setId(doc.getId());
+                    view.setDocumentType(doc.getDocumentType());
+                    view.setOriginalFilename(doc.getOriginalFilename());
+                    view.setSizeBytes(doc.getSizeBytes());
+                    view.setContentType(doc.getContentType());
+                    view.setDownloadUrl("/api/admin/merchants/" + id + "/kyc-documents/" + doc.getId() + "/download");
+                    return view;
+                })
+                .collect(Collectors.toList());
         Map<String, Object> response = new HashMap<>();
         response.put("merchantId", id);
         response.put("merchantName", merchant.getLegalEntityName());
@@ -300,9 +188,6 @@ public class SuperAdminController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Download KYC document
-     */
     @Operation(summary = "Download KYC document", description = "Download a specific KYC document")
     @GetMapping("/{merchantId}/kyc-documents/{documentId}/download")
     public ResponseEntity<byte[]> downloadKycDocument(
@@ -316,13 +201,9 @@ public class SuperAdminController {
         return new ResponseEntity<>(contentBytes, headers, HttpStatus.OK);
     }
 
-    /**
-     * Export merchants to CSV
-     */
     @Operation(summary = "Export merchants to CSV", description = "Export merchant list to CSV format")
     @GetMapping("/export/csv")
-    public ResponseEntity<byte[]> exportMerchantsToCsv(
-            @RequestParam(required = false) String search) {
+    public ResponseEntity<byte[]> exportMerchantsToCsv(@RequestParam(required = false) String search) {
         List<MerchantApplicationEntity> merchants = merchantApplicationService.findAllMerchantsForExport(search);
         StringBuilder csv = new StringBuilder();
         csv.append("ID,Legal Entity Name,Business Type,Contact Email,City,State,Status,Created At\n");
@@ -344,13 +225,9 @@ public class SuperAdminController {
         return new ResponseEntity<>(csvBytes, headers, HttpStatus.OK);
     }
 
-    /**
-     * Export merchants to PDF
-     */
     @Operation(summary = "Export merchants to PDF", description = "Export merchant list to PDF format")
     @GetMapping("/export/pdf")
-    public ResponseEntity<byte[]> exportMerchantsToPdf(
-            @RequestParam(required = false) String search) {
+    public ResponseEntity<byte[]> exportMerchantsToPdf(@RequestParam(required = false) String search) {
         String pdfContent = "PDF Export of Merchants\n\nSearch: " + (search != null ? search : "All") + "\n\n";
         pdfContent += "This would contain the actual PDF content with merchant data.\n";
         pdfContent += "Generated at: " + new Date();
@@ -361,9 +238,6 @@ public class SuperAdminController {
         return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
     }
 
-    /**
-     * Convert entity to view response with masked sensitive data
-     */
     private MerchantViewResponse convertToViewResponse(MerchantApplicationEntity entity) {
         MerchantViewResponse response = new MerchantViewResponse();
         response.setId(entity.getId());
@@ -404,26 +278,23 @@ public class SuperAdminController {
         response.setRefundPolicyUrl(entity.getRefundPolicyUrl());
         response.setRiskCategory(entity.getRiskCategory());
         List<MerchantViewResponse.KycDocumentView> kycDocs = entity.getKycDocuments().stream()
-            .map(doc -> {
-                MerchantViewResponse.KycDocumentView view = new MerchantViewResponse.KycDocumentView();
-                view.setId(doc.getId());
-                view.setDocumentType(doc.getDocumentType());
-                view.setOriginalFilename(doc.getOriginalFilename());
-                view.setSizeBytes(doc.getSizeBytes());
-                view.setContentType(doc.getContentType());
-                view.setDownloadUrl("/api/super-admin/merchants/" + entity.getId() + "/kyc-documents/" + doc.getId() + "/download");
-                return view;
-            })
-            .collect(Collectors.toList());
+                .map(doc -> {
+                    MerchantViewResponse.KycDocumentView view = new MerchantViewResponse.KycDocumentView();
+                    view.setId(doc.getId());
+                    view.setDocumentType(doc.getDocumentType());
+                    view.setOriginalFilename(doc.getOriginalFilename());
+                    view.setSizeBytes(doc.getSizeBytes());
+                    view.setContentType(doc.getContentType());
+                    view.setDownloadUrl("/api/admin/merchants/" + entity.getId() + "/kyc-documents/" + doc.getId() + "/download");
+                    return view;
+                })
+                .collect(Collectors.toList());
         response.setKycDocuments(kycDocs);
         response.setCreatedAt(entity.getCreatedAt());
         response.setStatus(entity.getStatus() != null ? entity.getStatus().name() : "UNKNOWN");
         return response;
     }
 
-    /**
-     * Mask sensitive data showing only last few characters
-     */
     private String maskSensitiveData(String data, int visibleChars) {
         if (data == null || data.length() <= visibleChars) {
             return data;

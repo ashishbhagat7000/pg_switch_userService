@@ -33,8 +33,14 @@ public class UserKeyService {
         entity.setKeyEncrypted(encryptedKey);
         entity.setKeySizeBits(keySizeBits);
         long now = System.currentTimeMillis();
-        if (entity.getCreatedAt() == 0) entity.setCreatedAt(now);
-        else entity.setRotatedAt(now);
+        if (entity.getCreatedAt() == 0) {
+            entity.setCreatedAt(now);
+            entity.setKeyVersion(1); // Initial version
+        } else {
+            entity.setRotatedAt(now);
+            entity.setPreviousKeyVersion(entity.getKeyVersion());
+            entity.setKeyVersion((entity.getKeyVersion() != null ? entity.getKeyVersion() : 1) + 1);
+        }
 
         userKeyRepository.save(entity);
         return rawKeyBase64; // return plaintext once to caller; not stored
@@ -68,14 +74,54 @@ public class UserKeyService {
         var all = userKeyRepository.findAll();
         int count = 0;
         for (UserKeyEntity e : all) {
-            // decrypt current user key using PREVIOUS master key material
+            // 1. Decrypt current user key using PREVIOUS master key material
             String plaintextUserKey = cryptoService.decryptWithKey(e.getKeyEncrypted(), previousMasterKeyBase64);
-            // store old plaintext as requested
+            
+            // 2. Store old plaintext as requested (audit backup)
             e.setOldPlainUserKeyBase64(plaintextUserKey);
-            // encrypt same plaintext under new master
+            
+            // 3. Re-encrypt same plaintext under new master
             String rewrapped = cryptoService.encryptWithKey(plaintextUserKey, newMasterKeyBase64);
             e.setKeyEncrypted(rewrapped);
+            
+            // 4. Update version tracking
+            e.setPreviousKeyVersion(e.getKeyVersion());
+            e.setKeyVersion((e.getKeyVersion() != null ? e.getKeyVersion() : 1) + 1);
+            
+            // 5. Mark when this was done
             e.setLastRewrappedAt(System.currentTimeMillis());
+            
+            userKeyRepository.save(e);
+            count++;
+        }
+        return count;
+    }
+
+    /**
+     * Rewrap all user keys using KMS (AWS handles master key rotation automatically).
+     * For KMS-based systems, we just re-encrypt user keys with current KMS key.
+     */
+    public int rewrapAllUserKeysWithKMS() {
+        var all = userKeyRepository.findAll();
+        int count = 0;
+        for (UserKeyEntity e : all) {
+            // 1. Decrypt current user key using current KMS key
+            String plaintextUserKey = cryptoService.decrypt(e.getKeyEncrypted());
+            
+            // 2. Store old plaintext as requested (audit backup)
+            e.setOldPlainUserKeyBase64(plaintextUserKey);
+            
+            // 3. Re-encrypt same plaintext with current KMS key (AWS handles rotation)
+            String rewrapped = cryptoService.encrypt(plaintextUserKey);
+            e.setKeyEncrypted(rewrapped);
+            
+            // 4. Update version tracking
+            e.setPreviousKeyVersion(e.getKeyVersion());
+            e.setKeyVersion((e.getKeyVersion() != null ? e.getKeyVersion() : 1) + 1);
+            
+            // 5. Mark when this was done
+            e.setLastRewrappedAt(System.currentTimeMillis());
+            
             userKeyRepository.save(e);
             count++;
         }

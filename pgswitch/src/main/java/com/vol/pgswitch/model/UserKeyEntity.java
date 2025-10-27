@@ -39,6 +39,14 @@ public class UserKeyEntity {
     // Timestamp when the key was last rewrapped under a new master key
     @Field("last_rewrapped_at")
     private Long lastRewrappedAt;
+    
+    // Version number for key rotation tracking
+    @Field("key_version")
+    private Integer keyVersion;
+    
+    // Previous key version (for audit trail)
+    @Field("previous_key_version")
+    private Integer previousKeyVersion;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -56,6 +64,10 @@ public class UserKeyEntity {
     public void setOldPlainUserKeyBase64(String oldPlainUserKeyBase64) { this.oldPlainUserKeyBase64 = oldPlainUserKeyBase64; }
     public Long getLastRewrappedAt() { return lastRewrappedAt; }
     public void setLastRewrappedAt(Long lastRewrappedAt) { this.lastRewrappedAt = lastRewrappedAt; }
+    public Integer getKeyVersion() { return keyVersion; }
+    public void setKeyVersion(Integer keyVersion) { this.keyVersion = keyVersion; }
+    public Integer getPreviousKeyVersion() { return previousKeyVersion; }
+    public void setPreviousKeyVersion(Integer previousKeyVersion) { this.previousKeyVersion = previousKeyVersion; }
 }
 
 
