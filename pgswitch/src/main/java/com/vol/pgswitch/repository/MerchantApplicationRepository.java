@@ -3,9 +3,10 @@ package com.vol.pgswitch.repository;
 import com.vol.pgswitch.model.MerchantApplicationEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.nio.file.LinkOption;
 import java.util.List;
 
 /**
@@ -32,7 +33,7 @@ import java.util.List;
  * - No direct access to decrypted sensitive data
  */
 @Repository
-public interface MerchantApplicationRepository extends MongoRepository<MerchantApplicationEntity, String> {
+public interface MerchantApplicationRepository extends JpaRepository<MerchantApplicationEntity, Long> {
     
     /**
      * Find merchants by legal entity name or contact email (case insensitive)

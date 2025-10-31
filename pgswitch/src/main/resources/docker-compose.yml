@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  keto:
+    image: oryd/keto:latest   # or specific version like v0.14.0
+    container_name: keto
+    ports:
+      - "4466:4466"  # Read API
+      - "4467:4467"  # Write API
+    volumes:
+      - ./keto.yml:/home/ory/keto.yml  # Mount local keto.yml
+    command: serve --config /home/ory/keto.yml
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: debug
+      # Namespaces can still be defined in YAML, no need to redefine here

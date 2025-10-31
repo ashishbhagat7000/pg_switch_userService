@@ -97,7 +97,7 @@ public class MerchantApplicationService {
      * @throws IOException if file storage fails
      */
     @Transactional
-    public String submit(MerchantApplicationRequest request, List<MultipartFile> files) throws IOException {
+    public Long submit(MerchantApplicationRequest request, List<MultipartFile> files) throws IOException {
         MerchantApplicationEntity entity = new MerchantApplicationEntity();
         
         // Map non-sensitive fields (stored in plain text for querying and reporting)
@@ -188,7 +188,7 @@ public class MerchantApplicationService {
     /**
      * Find merchant by ID
      */
-    public Optional<MerchantApplicationEntity> findById(String id) {
+    public Optional<MerchantApplicationEntity> findById(Long id) {
         return repository.findById(id);
     }
 
@@ -218,7 +218,7 @@ public class MerchantApplicationService {
      * Update merchant application
      */
     @Transactional
-    public MerchantApplicationEntity updateMerchant(String id, MerchantUpdateRequest updateRequest) {
+    public MerchantApplicationEntity updateMerchant(Long id, MerchantUpdateRequest updateRequest) {
         MerchantApplicationEntity entity = repository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Merchant not found with ID: " + id));
 
@@ -350,8 +350,51 @@ public class MerchantApplicationService {
     /**
      * Delete merchant application
      */
+
+    /**
+     * Approve a merchant application
+     */
     @Transactional
-    public void deleteMerchant(String id) {
+    public MerchantApplicationEntity approveMerchant(Long id) {
+        MerchantApplicationEntity entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Merchant not found with ID: " + id));
+
+        if (entity.getStatus() != ApplicationStatus.SUBMITTED) {
+            throw new IllegalStateException("Can only approve applications in SUBMITTED status. Current status: " + entity.getStatus());
+        }
+
+        entity.setStatus(ApplicationStatus.APPROVED);
+        entity.setUpdatedAt(System.currentTimeMillis());
+        entity.setApprovedAt(System.currentTimeMillis());
+
+        return repository.save(entity);
+    }
+
+    /**
+     * Reject a merchant application
+     */
+    @Transactional
+    public MerchantApplicationEntity rejectMerchant(Long id, String reason) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new IllegalArgumentException("Rejection reason is required");
+        }
+
+        MerchantApplicationEntity entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Merchant not found with ID: " + id));
+
+        if (entity.getStatus() != ApplicationStatus.SUBMITTED) {
+            throw new IllegalStateException("Can only reject applications in SUBMITTED status. Current status: " + entity.getStatus());
+        }
+
+        entity.setStatus(ApplicationStatus.REJECTED);
+        entity.setUpdatedAt(System.currentTimeMillis());
+        entity.setRejectedAt(System.currentTimeMillis());
+        entity.setRejectionReason(reason);
+
+        return repository.save(entity);
+    }
+
+    public void deleteMerchant(Long id) {
         MerchantApplicationEntity entity = repository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Merchant not found with ID: " + id));
 
@@ -360,6 +403,10 @@ public class MerchantApplicationService {
 
         // Delete the merchant application
         repository.delete(entity);
+    }
+
+    public List<MerchantApplicationEntity> findAllMerchants() {
+        return repository.findAll();
     }
 }
 

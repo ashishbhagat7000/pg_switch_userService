@@ -1,0 +1,23 @@
+dsn: postgres://postgres:root@host.docker.internal:5433/ory_db?sslmode=disable
+
+log:
+  level: debug
+
+serve:
+  read:
+    host: 0.0.0.0
+    port: 4466
+  write:
+    host: 0.0.0.0
+    port: 4467
+
+namespaces:
+  - name: files
+  - name: documents
+  - name: groups
+  - name: payment
+  - name: roles
+  - name: bbps
+  - name: PG
+  - name: merchant_group
+  - name: merchant_application

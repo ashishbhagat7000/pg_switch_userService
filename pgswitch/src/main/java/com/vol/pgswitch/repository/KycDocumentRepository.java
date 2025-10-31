@@ -1,7 +1,7 @@
 package com.vol.pgswitch.repository;
 
 import com.vol.pgswitch.model.KycDocumentEntity;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -28,10 +28,10 @@ import org.springframework.stereotype.Repository;
  * - Paths are sanitized to prevent directory traversal
  */
 @Repository
-public interface KycDocumentRepository extends MongoRepository<KycDocumentEntity, String> {
+public interface KycDocumentRepository extends JpaRepository<KycDocumentEntity, Long> {
     
     /**
      * Delete KYC documents by application ID
      */
-    void deleteByApplication_Id(String applicationId);
+    void deleteByApplication_Id(Long applicationId);
 }

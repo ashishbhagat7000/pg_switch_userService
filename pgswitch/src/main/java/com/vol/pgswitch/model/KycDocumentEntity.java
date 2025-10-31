@@ -1,10 +1,10 @@
 package com.vol.pgswitch.model;
 
+import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;
-import org.springframework.data.mongodb.core.mapping.DBRef;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 /**
  * KycDocumentEntity - Document for storing KYC document metadata
@@ -33,40 +33,53 @@ import org.springframework.data.mongodb.core.mapping.DBRef;
  * - Indexed fields for efficient document queries
  * - Embedded metadata for file information
  */
-@Document(collection = "kyc_documents")
+@Entity
+@Table(name = "kyc_documents")
+@NoArgsConstructor
+@AllArgsConstructor
 public class KycDocumentEntity {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id; // Changed type from String to Long, standard for JPA IDs
 
-    @DBRef
+    // Reference to parent merchant application (Many-to-One relationship)
+    // This creates a foreign key column named 'application_id' in the kyc_documents table.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "application_id", nullable = false)
     @NotNull(message = "Application reference is required")
-    private MerchantApplicationEntity application; // Reference to parent merchant application
+    private MerchantApplicationEntity application;
 
     @NotBlank(message = "Document type is required")
     @Size(max = 100, message = "Document type must not exceed 100 characters")
-    @Field("document_type")
+    @Column(name = "document_type", length = 100, nullable = false)
     private String documentType; // Type of document: PAN, GST_CERT, INCORP_CERT, etc.
 
     @NotBlank(message = "Stored path is required")
     @Size(max = 500, message = "Stored path must not exceed 500 characters")
-    @Field("stored_path")
+    @Column(name = "stored_path", length = 500, nullable = false)
     private String storedPath; // Secure file system path where document is stored
 
     @Size(max = 255, message = "Original filename must not exceed 255 characters")
-    @Field("original_filename")
+    @Column(name = "original_filename", length = 255)
     private String originalFilename; // Original filename for audit trail
-    
+
     @PositiveOrZero(message = "File size must be positive or zero")
-    @Field("size_bytes")
+    @Column(name = "size_bytes")
     private Long sizeBytes; // File size in bytes for validation and reporting
-    
+
     @Size(max = 100, message = "Content type must not exceed 100 characters")
-    @Field("content_type")
+    @Column(name = "content_type", length = 100)
     private String contentType; // MIME type of the uploaded file
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     public MerchantApplicationEntity getApplication() { return application; }
     public void setApplication(MerchantApplicationEntity application) { this.application = application; }
     public String getDocumentType() { return documentType; }

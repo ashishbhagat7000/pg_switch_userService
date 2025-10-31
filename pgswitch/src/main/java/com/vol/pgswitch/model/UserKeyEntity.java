@@ -1,55 +1,69 @@
 package com.vol.pgswitch.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.Field;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 
 /**
  * UserKeyEntity - Stores an application-level encryption key per user.
  * The key material is stored encrypted-at-rest using the platform master key.
  */
-@Document(collection = "user_keys")
+@Entity
+@Table(name = "user_keys")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class UserKeyEntity {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id; // Changed from String to Long for relational database best practices
 
-    @Indexed(unique = true)
-    @Field("user_id")
+    // Indexed and unique field for efficient lookups by user ID
+    @Column(name = "user_id", nullable = false, unique = true, length = 255)
     private String userId;
 
     // Base64 key encrypted using CryptoService (AES-GCM) with master key
-    @Field("key_encrypted")
+    // Length is set high to accommodate encrypted, base64-encoded key material
+    @Column(name = "key_encrypted", nullable = false, length = 512)
     private String keyEncrypted;
 
-    @Field("key_size_bits")
+    @Column(name = "key_size_bits", nullable = false)
     private int keySizeBits;
 
-    @Field("created_at")
+    @Column(name = "created_at", nullable = false)
     private long createdAt;
 
-    @Field("rotated_at")
+    @Column(name = "rotated_at")
     private Long rotatedAt;
 
     // Stores previous decrypted user key (Base64) for audit/backup per request
-    @Field("old_plain_user_key_base64")
+    // Stored as CLOB/TEXT if supported by dialect, or just long VARCHAR.
+    @Column(name = "old_plain_user_key_base64", length = 1024)
     private String oldPlainUserKeyBase64;
 
     // Timestamp when the key was last rewrapped under a new master key
-    @Field("last_rewrapped_at")
+    @Column(name = "last_rewrapped_at")
     private Long lastRewrappedAt;
-    
+
     // Version number for key rotation tracking
-    @Field("key_version")
+    @Column(name = "key_version", nullable = false)
     private Integer keyVersion;
-    
+
     // Previous key version (for audit trail)
-    @Field("previous_key_version")
+    @Column(name = "previous_key_version")
     private Integer previousKeyVersion;
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
     public String getKeyEncrypted() { return keyEncrypted; }

@@ -1,3 +1,4 @@
+/*
 package com.vol.pgswitch.config;
 
 import com.mongodb.client.MongoClient;
@@ -9,11 +10,13 @@ import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
 import org.springframework.stereotype.Component;
 
+*/
 /**
  * Custom MongoDB Configuration using injected properties.
  * This explicitly ensures the driver uses the remote host/port
  * and should prevent the default localhost check.
- */
+ *//*
+
 @Configuration
 @EnableMongoRepositories(basePackages = "com.vol.pgswitch.repository")
 public class MongoDBConfiguration extends AbstractMongoClientConfiguration {
@@ -43,10 +46,12 @@ public class MongoDBConfiguration extends AbstractMongoClientConfiguration {
         return this.database;
     }
 
-    /**
+    */
+/**
      * Override the default MongoClient bean creation to use the explicit URI.
      * The URI is built from individual properties, which often resolves subtle issues.
-     */
+     *//*
+
     @Override
     @Bean
     public MongoClient mongoClient() {
@@ -71,4 +76,4 @@ public class MongoDBConfiguration extends AbstractMongoClientConfiguration {
     // as it's typically used by MongoTemplate to select the database.
     // NOTE: This will return 'pg_switch' based on your properties.
     // If you need 'pgswitch', change the database property in application.properties.
-}
+}*/
